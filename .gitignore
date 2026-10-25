@@ -1,0 +1,5 @@
+# the built program goes in GitHub Releases, not in the code
+nativo/dist/
+
+# local tool caches
+.impeccable/
