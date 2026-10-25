@@ -1,5 +1,6 @@
 # the built program goes in GitHub Releases, not in the code
 nativo/dist/
+nativo/test/out/
 
 # local tool caches
 .impeccable/

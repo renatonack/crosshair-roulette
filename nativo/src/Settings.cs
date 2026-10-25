@@ -21,7 +21,15 @@ namespace CrosshairRoulette
         public string GsiToken, CfgDir;
         public Spec Current;
 
-        public static readonly string Folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Crosshair Roulette");
+        // "roleta" = a new crosshair on every kill; "fixa" = one crosshair, Crosshair V2 style
+        public string Mode = "roleta";
+        public string FixedShape = "cruz", FixedColor = "#3bff6b";
+        public double FixedSize = 6, FixedThick = 2, FixedGap = 3;
+        public bool FixedOutline = true, FixedRainbow;
+
+        // CROSSHAIR_ROULETTE_DATA lets a test run use its own settings instead of yours
+        public static readonly string Folder = Environment.GetEnvironmentVariable("CROSSHAIR_ROULETTE_DATA")
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Crosshair Roulette");
         static readonly string FilePath = Path.Combine(Folder, "settings.json");
 
         public static Settings Load()
@@ -50,6 +58,15 @@ namespace CrosshairRoulette
                 s.GsiToken = Json.Str(d, "gsiToken", null);
                 s.CfgDir = Json.Str(d, "cfgDir", null);
                 s.Current = Spec.FromDict(Json.Get(d, "current"));
+                s.Mode = Json.Str(d, "mode", "roleta") == "fixa" ? "fixa" : "roleta";
+                var f = Json.Get(d, "fixed");
+                s.FixedShape = Json.Str(f, "shape", "cruz");
+                s.FixedColor = Json.Str(f, "color", "#3bff6b");
+                s.FixedSize = Json.Num(f, "size", 6);
+                s.FixedThick = Json.Num(f, "thick", 2);
+                s.FixedGap = Json.Num(f, "gap", 3);
+                s.FixedOutline = Json.Bool(f, "outline", true);
+                s.FixedRainbow = Json.Bool(f, "rainbow", false);
             }
             if (string.IsNullOrEmpty(s.GsiToken))
             {
@@ -72,6 +89,12 @@ namespace CrosshairRoulette
                 ["startWithWindows"] = StartWithWindows, ["trayHintShown"] = TrayHintShown,
                 ["gsiPort"] = GsiPort, ["gsiToken"] = GsiToken, ["cfgDir"] = CfgDir,
                 ["current"] = Current?.ToDict(),
+                ["mode"] = Mode,
+                ["fixed"] = new Dictionary<string, object>
+                {
+                    ["shape"] = FixedShape, ["color"] = FixedColor, ["size"] = FixedSize, ["thick"] = FixedThick,
+                    ["gap"] = FixedGap, ["outline"] = FixedOutline, ["rainbow"] = FixedRainbow,
+                },
             };
             try
             {

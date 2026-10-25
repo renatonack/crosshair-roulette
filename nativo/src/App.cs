@@ -44,12 +44,14 @@ namespace CrosshairRoulette
         readonly MainForm window;
         string cfgDirCache;
         bool cfgDirLooked, rolling, quitting, wasConnected;
-        Spec flicker, result;
+        Spec flicker, result, fixedSpec;
         DateTime rollStart, lastFrame;
         int rollN;
 
+        internal MainForm Window => window; // for the snapshot test
         public bool Rolling => rolling;
-        public Spec Display => rolling ? flicker : Current; // what is on screen right now
+        public bool FixedMode => S.Mode == "fixa";
+        public Spec Display => FixedMode ? fixedSpec : rolling ? flicker : Current; // what is on screen right now
         public bool Connected => (DateTime.UtcNow - LastPacket).TotalSeconds < 25; // CS2 heartbeats every 10s
 
         public App(bool startHidden)
@@ -57,6 +59,7 @@ namespace CrosshairRoulette
             ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
             S = Settings.Load();
             Current = S.Current ?? Crosshairs.Resolve(Crosshairs.ById("verde_modesto"), rnd);
+            RebuildFixed();
             if (!string.IsNullOrEmpty(S.CfgDir))
             {
                 // fix a folder picked one level too high; drop it if it's what Steam would find anyway
@@ -68,7 +71,7 @@ namespace CrosshairRoulette
             sound.SetVolume(S.Volume);
             messages = new MessageWindow(this);
 
-            detector.Kill += n => { Kills += n; Roll(); };
+            detector.Kill += n => { Kills += n; if (!FixedMode) Roll(); };
             detector.Shot += OnShot;
             detector.Status += (obs, map) =>
             {
@@ -106,7 +109,43 @@ namespace CrosshairRoulette
 
             window = new MainForm(this);
             RenderOverlay();
+            EnsureAnim();
             if (!startHidden) window.Show();
+        }
+
+        // ------------------------------------------------------------ the two modes
+        void RebuildFixed() =>
+            fixedSpec = Crosshairs.Fixed(S.FixedShape, S.FixedSize, S.FixedThick, S.FixedGap, S.FixedOutline, S.FixedColor, S.FixedRainbow);
+
+        public void SetMode(string mode)
+        {
+            S.Mode = mode == "fixa" ? "fixa" : "roleta";
+            rolling = false;
+            Spread = 0;
+            S.Save();
+            RenderOverlay();
+            EnsureAnim();
+            BuildTrayMenu();
+            Changed?.Invoke();
+        }
+
+        // call after changing any S.Fixed* value
+        public void FixedChanged()
+        {
+            RebuildFixed();
+            S.Save();
+            RenderOverlay();
+            EnsureAnim();
+            Frame?.Invoke();
+            Changed?.Invoke();
+        }
+
+        // the rainbow needs a new frame all the time; everything else only while it moves
+        bool NeedsFrames => rolling || Spread > 0 || (Display?.Rainbow ?? false);
+
+        void EnsureAnim()
+        {
+            if (NeedsFrames) StartAnim();
         }
 
         // ------------------------------------------------------------ the roulette
@@ -131,6 +170,7 @@ namespace CrosshairRoulette
 
         public void Roll()
         {
+            if (FixedMode) return; // the fixed crosshair never changes on its own
             result = PickNext();
             rolling = true;
             rollStart = DateTime.UtcNow;
@@ -185,12 +225,13 @@ namespace CrosshairRoulette
                 if (Spread < 0.5) Spread = 0;
                 dirty = true;
             }
+            if (Display?.Rainbow ?? false) dirty = true;
             if (dirty)
             {
                 RenderOverlay();
                 Frame?.Invoke();
             }
-            if (!rolling && Spread == 0) anim.Stop();
+            if (!NeedsFrames) anim.Stop();
         }
 
         void OnShot(int shots)
@@ -370,14 +411,15 @@ namespace CrosshairRoulette
             var m = new ContextMenuStrip();
             m.Items.Add("Abrir Crosshair Roulette", null, (s, e) => ShowWindow());
             m.Items.Add(new ToolStripSeparator());
-            m.Items.Add($"Sortear mira  ({KeyLabel(S.HotkeyRoll)})", null, (s, e) => Roll());
+            m.Items.Add(FixedMode ? "Trocar para a roleta" : "Trocar para a mira fixa", null, (s, e) => SetMode(FixedMode ? "roleta" : "fixa"));
+            if (!FixedMode) m.Items.Add($"Sortear mira  ({KeyLabel(S.HotkeyRoll)})", null, (s, e) => Roll());
             m.Items.Add($"{(S.OverlayVisible ? "Esconder" : "Mostrar")} mira  ({KeyLabel(S.HotkeyToggle)})", null, (s, e) => ToggleOverlay());
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add("Sair", null, (s, e) => Quit());
             var old = tray.ContextMenuStrip;
             tray.ContextMenuStrip = m;
             old?.Dispose();
-            string tip = "Crosshair Roulette" + (Current != null ? " — " + Current.Name : "");
+            string tip = "Crosshair Roulette" + (Display != null ? " — " + Display.Name : "");
             tray.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
         }
 

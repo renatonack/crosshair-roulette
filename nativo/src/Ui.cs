@@ -88,6 +88,64 @@ namespace CrosshairRoulette
             Text = text;
             Size = new Size(TextRenderer.MeasureText(text, Font).Width + Theme.D(28), Theme.D(34));
         }
+
+        // selected look for option buttons (shape, mode)
+        public void SetOn(bool on)
+        {
+            BackColor = on ? Theme.Accent : Theme.Panel2;
+            ForeColor = on ? Theme.AccentInk : Theme.Text;
+            Font = on ? Theme.BodyBold : Theme.Body;
+            FlatAppearance.BorderColor = on ? Theme.Accent : Theme.Line;
+            FlatAppearance.MouseOverBackColor = on ? Theme.AccentHover : Color.FromArgb(39, 42, 51);
+        }
+    }
+
+    // a colour choice; the rainbow one shows the whole colour wheel
+    sealed class Swatch : Control
+    {
+        public readonly Color Value;
+        public readonly bool Rainbow;
+        public bool Selected;
+
+        public Swatch(Color value, bool rainbow = false)
+        {
+            Value = value;
+            Rainbow = rainbow;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+            Size = new Size(Theme.D(34), Theme.D(34));
+            Cursor = Cursors.Hand;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Parent?.BackColor ?? Theme.Bg);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var inner = new RectangleF(Theme.D(4), Theme.D(4), Width - Theme.D(8), Height - Theme.D(8));
+            using (var path = Theme.Round(inner, Theme.D(5)))
+            {
+                if (Rainbow)
+                {
+                    using (var b = new LinearGradientBrush(inner, Color.Red, Color.Red, 0f))
+                    {
+                        b.InterpolationColors = new ColorBlend
+                        {
+                            Colors = new[] { Color.Red, Color.Yellow, Color.Lime, Color.Cyan, Color.Blue, Color.Magenta, Color.Red },
+                            Positions = new[] { 0f, 1 / 6f, 2 / 6f, 3 / 6f, 4 / 6f, 5 / 6f, 1f },
+                        };
+                        g.FillPath(b, path);
+                    }
+                }
+                else using (var b = new SolidBrush(Value)) g.FillPath(b, path);
+                using (var p = new Pen(Color.FromArgb(70, 0, 0, 0))) g.DrawPath(p, path);
+            }
+            if (!string.IsNullOrEmpty(Text))
+                TextRenderer.DrawText(g, Text, Theme.BodyBold, Rectangle.Round(inner), Color.FromArgb(17, 17, 17), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (Selected)
+                using (var p = new Pen(Theme.Text, Theme.D(2)))
+                using (var ring = Theme.Round(new RectangleF(1, 1, Width - 2, Height - 2), Theme.D(7)))
+                    g.DrawPath(p, ring);
+        }
     }
 
     class Lbl : Label
@@ -160,6 +218,7 @@ namespace CrosshairRoulette
 
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -170,10 +229,11 @@ namespace CrosshairRoulette
             float px = x0 + (float)((value - Min) / (Max - Min)) * (x1 - x0);
             using (var track = new Pen(Theme.Track, Theme.D(4)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                 g.DrawLine(track, x0, y, x1, y);
-            using (var fill = new Pen(Theme.Accent, Theme.D(4)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            var on = Enabled ? Theme.Accent : Theme.Muted;
+            using (var fill = new Pen(on, Theme.D(4)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                 g.DrawLine(fill, x0, y, px, y);
             float r = Theme.D(8);
-            using (var b = new SolidBrush(Theme.Accent)) g.FillEllipse(b, px - r, y - r, 2 * r, 2 * r);
+            using (var b = new SolidBrush(on)) g.FillEllipse(b, px - r, y - r, 2 * r, 2 * r);
             if (Focused) using (var p = new Pen(Theme.Text, 1.5f)) g.DrawEllipse(p, px - r - 2, y - r - 2, 2 * r + 4, 2 * r + 4);
         }
     }

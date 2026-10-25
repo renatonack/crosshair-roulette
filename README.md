@@ -31,6 +31,15 @@ Não precisa instalar nada, só ter Windows 10 ou 11.
 
 Fechar a janela deixa o programa rodando na bandeja. Para sair, clique com o botão direito no ícone.
 
+## Dois modos
+
+- **Roleta**: a cada abate a mira muda para uma mira aleatória (as do vídeo).
+- **Mira fixa (estilo Crosshair V2)**: você escolhe uma mira e ela fica sempre na tela. Os abates não mudam nada.
+  Dá para escolher o formato (cruz, cruz + ponto, ponto, T, círculo, círculo + ponto), a cor
+  (inclusive **arco-íris**, que fica trocando de cor) e ajustar tamanho, espessura, espaço no meio e contorno preto.
+
+Troque de modo no topo da janela ou pelo ícone da bandeja.
+
 ## Atalhos
 
 - `F7`: sortear mira agora
@@ -57,6 +66,7 @@ A mira é só uma janela transparente por cima do jogo.
 
 - `nativo/src/*.cs`: o programa (C# / WinForms, .NET Framework 4.8)
 - `nativo/build.ps1`: compila `nativo/dist/CrosshairRoulette.exe` com o compilador C# do Visual Studio 2022 Build Tools
+- `nativo/test/snapshot.ps1`: abre a janela fora da tela com configurações de teste e salva fotos dos dois modos
 - `tools/fake-cs2.js`: simula o CS2 (`node tools/fake-cs2.js kill|hs|shoot|die`)
 
 As configurações ficam em `%APPDATA%\Crosshair Roulette\settings.json`.

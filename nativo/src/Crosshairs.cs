@@ -16,7 +16,7 @@ namespace CrosshairRoulette
     {
         public string Id = "random", Name = "", Type = "cross", Color = "#ffffff";
         public double Alpha = 1, Len, Thick, Gap, Outline, Dot, Size, Width, Spacing, Dynamic, DynamicMax;
-        public bool TStyle, Corners;
+        public bool TStyle, Corners, Rainbow;
 
         public Spec Clone() => (Spec)MemberwiseClone();
 
@@ -27,7 +27,7 @@ namespace CrosshairRoulette
                 ["id"] = Id, ["name"] = Name, ["type"] = Type, ["color"] = Color, ["alpha"] = Alpha,
                 ["len"] = Len, ["thick"] = Thick, ["gap"] = Gap, ["outline"] = Outline, ["dot"] = Dot,
                 ["size"] = Size, ["width"] = Width, ["spacing"] = Spacing,
-                ["dynamic"] = Dynamic, ["dynamicMax"] = DynamicMax, ["tStyle"] = TStyle, ["corners"] = Corners,
+                ["dynamic"] = Dynamic, ["dynamicMax"] = DynamicMax, ["tStyle"] = TStyle, ["corners"] = Corners, ["rainbow"] = Rainbow,
             };
             return d;
         }
@@ -43,6 +43,7 @@ namespace CrosshairRoulette
                 Outline = Json.Num(o, "outline", 0), Dot = Json.Num(o, "dot", 0), Size = Json.Num(o, "size", 0),
                 Width = Json.Num(o, "width", 0), Spacing = Json.Num(o, "spacing", 0), Dynamic = Json.Num(o, "dynamic", 0),
                 DynamicMax = Json.Num(o, "dynamicMax", 0), TStyle = Json.Bool(o, "tStyle", false), Corners = Json.Bool(o, "corners", false),
+                Rainbow = Json.Bool(o, "rainbow", false),
             };
             return s.IsDrawable ? s : null;
         }
@@ -52,6 +53,7 @@ namespace CrosshairRoulette
             Type == "flood" ||
             (Type == "cross" && (Len > 0 && Thick > 0 || Dot > 0)) ||
             (Type == "hollow" && Size > 0 && Width > 0) ||
+            (Type == "circle" && Len > 0 && Thick > 0) ||
             (Type == "grid" && Len > 0 && Thick > 0);
     }
 
@@ -91,6 +93,26 @@ namespace CrosshairRoulette
         };
 
         public static Spec ById(string id) => Presets.Find(p => p.Id == id);
+
+        // The "Mira fixa" (fixed mode) crosshair, Crosshair V2 style, from the editor's choices.
+        //   shape: cruz, cruz_ponto, ponto, t, circulo, circulo_ponto
+        public static Spec Fixed(string shape, double size, double thick, double gap, bool outline, string color, bool rainbow)
+        {
+            var s = new Spec
+            {
+                Id = "fixa", Name = rainbow ? "Mira fixa (arco-íris)" : "Mira fixa", Type = "cross",
+                Color = color, Rainbow = rainbow, Len = size, Thick = thick, Gap = gap, Outline = outline ? 1 : 0,
+            };
+            switch (shape)
+            {
+                case "cruz_ponto": s.Dot = Math.Max(2, thick); break;
+                case "ponto": s.Len = 0; s.Gap = 0; s.Dot = Math.Max(1.5, size / 2); break;
+                case "t": s.TStyle = true; break;
+                case "circulo": s.Type = "circle"; break;
+                case "circulo_ponto": s.Type = "circle"; s.Dot = Math.Max(2, thick); break;
+            }
+            return s;
+        }
 
         // a preset ready to draw: the flood gets a new colour every roll
         public static Spec Resolve(Spec preset, Random rnd)
@@ -140,6 +162,7 @@ namespace CrosshairRoulette
         {
             if (s.Type == "flood") return double.PositiveInfinity;
             if (s.Type == "hollow") return s.Size / 2 + s.Width + 2;
+            if (s.Type == "circle") return s.Len + s.Thick / 2 + s.Outline + 2;
             if (s.Type == "grid") return Math.Max(s.Len / 2, s.Spacing / 2 + s.Thick) + 2;
             double r = Math.Max(Math.Max(s.Gap + s.DynamicMax + s.Len, s.Thick / 2), s.Dot) + s.Outline + 2;
             return r > 1500 ? double.PositiveInfinity : r;
@@ -152,12 +175,29 @@ namespace CrosshairRoulette
             return System.Drawing.Color.FromArgb(a, (n >> 16) & 255, (n >> 8) & 255, n & 255);
         }
 
+        // one lap around the colour wheel every 3 s, from a shared clock so the
+        // overlay and the preview stay in step
+        static Color RainbowColor(double alpha)
+        {
+            double h = (Environment.TickCount & int.MaxValue) % 3000 / 500.0; // 0..6
+            double x = 1 - Math.Abs(h % 2 - 1);
+            double r, g, b;
+            if (h < 1) { r = 1; g = x; b = 0; }
+            else if (h < 2) { r = x; g = 1; b = 0; }
+            else if (h < 3) { r = 0; g = 1; b = x; }
+            else if (h < 4) { r = 0; g = x; b = 1; }
+            else if (h < 5) { r = x; g = 0; b = 1; }
+            else { r = 1; g = 0; b = x; }
+            int a = (int)Math.Round(Math.Max(0, Math.Min(1, alpha)) * 255);
+            return System.Drawing.Color.FromArgb(a, (int)(r * 255), (int)(g * 255), (int)(b * 255));
+        }
+
         // Draw with the Graphics origin on the aim point and units in 1080p px.
         public static void Draw(Graphics g, Spec s, double spread, RectangleF bounds, double opacity = 1)
         {
             if (s == null) return;
             double alpha = s.Alpha * opacity;
-            var color = ParseColor(s.Color, alpha);
+            var color = s.Rainbow ? RainbowColor(alpha) : ParseColor(s.Color, alpha);
             g.SmoothingMode = SmoothingMode.None;
             g.PixelOffsetMode = PixelOffsetMode.Half;
 
@@ -205,19 +245,39 @@ namespace CrosshairRoulette
                     return;
                 }
 
+                var black = System.Drawing.Color.FromArgb((int)Math.Round(Math.Min(1, alpha) * 255), 0, 0, 0);
+
+                if (s.Type == "circle")
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    float rr = (float)(s.Len + spread), T = (float)s.Thick, oc = (float)s.Outline, dc = (float)s.Dot;
+                    if (oc > 0)
+                    {
+                        using (var pen = new Pen(black, T + 2 * oc)) g.DrawEllipse(pen, -rr, -rr, 2 * rr, 2 * rr);
+                        if (dc > 0) using (var b = new SolidBrush(black)) g.FillEllipse(b, -dc / 2 - oc, -dc / 2 - oc, dc + 2 * oc, dc + 2 * oc);
+                    }
+                    using (var pen = new Pen(color, T)) g.DrawEllipse(pen, -rr, -rr, 2 * rr, 2 * rr);
+                    if (dc > 0) g.FillEllipse(brush, -dc / 2, -dc / 2, dc, dc);
+                    return;
+                }
+
                 // cross: CS2-style arms, black outline underneath, then the colour
                 float Lc = (float)s.Len, Tc = (float)s.Thick, G = (float)(s.Gap + spread), o = (float)s.Outline, dot = (float)s.Dot;
                 var arms = new List<RectangleF>();
-                if (!s.TStyle) arms.Add(new RectangleF(-Tc / 2, -G - Lc, Tc, Lc));
-                arms.Add(new RectangleF(-Tc / 2, G, Tc, Lc));
-                arms.Add(new RectangleF(-G - Lc, -Tc / 2, Lc, Tc));
-                arms.Add(new RectangleF(G, -Tc / 2, Lc, Tc));
+                if (Lc > 0 && Tc > 0)
+                {
+                    if (!s.TStyle) arms.Add(new RectangleF(-Tc / 2, -G - Lc, Tc, Lc));
+                    arms.Add(new RectangleF(-Tc / 2, G, Tc, Lc));
+                    arms.Add(new RectangleF(-G - Lc, -Tc / 2, Lc, Tc));
+                    arms.Add(new RectangleF(G, -Tc / 2, Lc, Tc));
+                }
                 if (o > 0)
                 {
-                    using (var black = new SolidBrush(System.Drawing.Color.FromArgb((int)Math.Round(Math.Min(1, alpha) * 255), 0, 0, 0)))
+                    using (var shade = new SolidBrush(black))
                     {
-                        foreach (var a in arms) g.FillRectangle(black, a.X - o, a.Y - o, a.Width + 2 * o, a.Height + 2 * o);
-                        if (dot > 0) g.FillRectangle(black, -dot / 2 - o, -dot / 2 - o, dot + 2 * o, dot + 2 * o);
+                        foreach (var a in arms) g.FillRectangle(shade, a.X - o, a.Y - o, a.Width + 2 * o, a.Height + 2 * o);
+                        if (dot > 0) g.FillRectangle(shade, -dot / 2 - o, -dot / 2 - o, dot + 2 * o, dot + 2 * o);
                     }
                 }
                 foreach (var a in arms) g.FillRectangle(brush, a);

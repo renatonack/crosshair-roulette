@@ -7,8 +7,8 @@ using System.Windows.Forms;
 [assembly: System.Reflection.AssemblyTitle("Crosshair Roulette")]
 [assembly: System.Reflection.AssemblyProduct("Crosshair Roulette")]
 [assembly: System.Reflection.AssemblyDescription("Cada abate no CS2 sorteia uma mira nova")]
-[assembly: System.Reflection.AssemblyVersion("1.1.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.1.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.2.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.2.0.0")]
 
 namespace CrosshairRoulette
 {
